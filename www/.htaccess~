@@ -1,4 +1,5 @@
-DirectoryIndex  index.html  index.php 
+#DirectoryIndex  index.html  index.php  
+#/_h5ai/server/php/index.php
 
 <ifModule mod_headers.c>
 Header unset ETag
