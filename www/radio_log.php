@@ -1,5 +1,5 @@
 <?php
-exec("sh /var/www/scripot.sh");
+exec("sh /var/www/script.sh");
 header("Refresh: 0;url=pifm.log.htm"); 
 exit();
 ?>
