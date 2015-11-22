@@ -1,3 +1,9 @@
+AuthType Basic
+AuthName "PiFM Radio Web Interface - Private Use Only (Controlls are not available outside LAN!)"
+AuthUserFile /var/.htpasswd
+Require valid-user
+ServerSignature Off
+
 DirectoryIndex  index.html  index.php 
 
 <ifModule mod_headers.c>
