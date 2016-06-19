@@ -1,0 +1,23 @@
+#!/bin/sh -e
+#
+# rc.local
+#
+# This script is executed at the end of each multiuser runlevel.
+# Make sure that the script will "exit 0" on success or any other
+# value on error.
+#
+# In order to enable or disable this script just change the execution
+# bits.
+#
+# By default this script does nothing.
+
+
+/sbin/blockdev --setra 2048 /dev/mmcblk0
+ls -1 /radio | wc -l > /filecount.txt
+rm -f pifm.radio.tempfile.*
+/playfm & 
+service rpimonitor start
+/network-monitor.sh &
+mount 192.168.1.4:/volume1/radio /radio
+
+exit 0

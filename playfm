@@ -1,6 +1,6 @@
 #!/bin/bash
 
-MUSIC_ROOT="/radio"
+MUSIC_ROOT="/radio_nas"
 PIFM_BINARY="/pifm"
 PIFM_FREQUENCY=100.0
 LOG_ROOT="/var/www/"
@@ -76,7 +76,7 @@ TEMP_FILES_PATTERN="$TEMP_FILES_PREFIX.XXXXX"
         #
 	# read compatible audio data from stdin and play with pifm at specified frequency:
         #     '$PIFM_BINARY' - $PIFM_FREQUENCY 
-	command="sudo -u www-data sox '$song' -t mp3 - channels 1 | avconv -v fatal -i pipe:0 -ac 1 -ar 22050 -b 352k -f wav - | '$PIFM_BINARY' - $PIFM_FREQUENCY"
+	command="sudo -u www-data sox '$song' -t wav - channels 1 | avconv -v fatal -i pipe:0 -ac 1 -ar 22050 -b 220k -f wav - | '$PIFM_BINARY' - $PIFM_FREQUENCY"
 
           echo "$command # $( date )"
           bash -c "$command"
