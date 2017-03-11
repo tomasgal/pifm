@@ -6,7 +6,7 @@
 rm -f pifm.radio.tempfile.*
 
 #Random list is being generated, this file is also generated hourly by crojob
-#Directory /var/tmp is mounted if /etc/fstab:
+#Directory /var/tmp is mounted in /etc/fstab:
 #tmpfs           /var/tmp        tmpfs   nodev,nosuid,size=1M 0    0
 ls /radio_nas/*.mp3 | sort -R | head -1000 > /var/tmp/list.txt
 
