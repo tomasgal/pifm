@@ -1,23 +1,19 @@
 #!/bin/sh -e
-#
-# rc.local
-#
-# This script is executed at the end of each multiuser runlevel.
-# Make sure that the script will "exit 0" on success or any other
-# value on error.
-#
-# In order to enable or disable this script just change the execution
-# bits.
-#
-# By default this script does nothing.
-
 
 /sbin/blockdev --setra 2048 /dev/mmcblk0
-ls -1 /radio | wc -l > /filecount.txt
+
+#ls -1 /radio | wc -l > /filecount.txt
 rm -f pifm.radio.tempfile.*
-/playfm & 
-service rpimonitor start
-/network-monitor.sh &
-mount 192.168.1.4:/volume1/radio /radio
+
+#Random list is being generated, this file is also generated hourly by crojob
+#Directory /var/tmp is mounted if /etc/fstab:
+#tmpfs           /var/tmp        tmpfs   nodev,nosuid,size=1M 0    0
+ls /radio_nas/*.mp3 | sort -R | head -1000 > /var/tmp/list.txt
+
+#Endless loop to play random file from the list
+while :
+  do
+    sh /pifmplay "`shuf -n 1 /var/tmp/list.txt`"
+done
 
 exit 0
