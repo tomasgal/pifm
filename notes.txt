@@ -1,0 +1,4 @@
+crontab -l shows:
+
+0 * * * * ls /radio_nas/*.mp3 | sort -R | head -1000 > /var/tmp/list.txt
+5 0 * * * sync && echo 3 > /proc/sys/vm/drop_caches
