@@ -2,31 +2,33 @@
 #
 # Historical rc.local startup script for the PiFM Raspberry Pi setup.
 #
-# This reflects the original deployment period, when rc.local was a practical
-# way to start a small appliance-like Raspberry Pi workflow at boot. A modern
-# system should use systemd units with explicit dependencies instead.
-
-# Increase read-ahead for the SD card block device.
-/sbin/blockdev --setra 2048 /dev/mmcblk0
-
-# Remove stale temporary PiFM playlist/audio files from the previous run.
-# The original command used a relative path and therefore depends on the boot
-# working directory. It is preserved here as part of the historical snapshot.
-#ls -1 /radio | wc -l > /filecount.txt
-rm -f pifm.radio.tempfile.*
-
-# Generate an initial random playlist. The same file was also regenerated hourly
-# by cron; see notes.txt.
+# This reflects an appliance-style Raspberry Pi deployment where rc.local starts
+# the playback loop at boot. A modern rebuild should use an explicit systemd
+# unit instead.
 #
-# /var/tmp was mounted as tmpfs in /etc/fstab:
-# tmpfs           /var/tmp        tmpfs   nodev,nosuid,size=1M 0    0
-ls /radio_nas/*.mp3 | sort -R | head -1000 > /var/tmp/list.txt
+# 2026 maintenance note:
+#   During maintenance roughly six years after the Raspbian Buster appliance
+#   build, the web status update was moved into this playback loop. The previous
+#   cron-based status parser inspected the running sox process; this version
+#   writes the selected track title directly before starting playback.
+#
+# Runtime assumptions:
+#   /radio_nas              MP3 repository
+#   /var/ramdrive           small tmpfs/ramdrive
+#   /var/ramdrive/list.txt  generated playlist
+#   /var/ramdrive/index.html web status served by mini_httpd
+#   /pifmplay               installed playback wrapper; see repository playfm
 
-# Endless loop: pick one random file from the generated list and pass it to the
-# historical /pifmplay script.
+ls /radio_nas/*.mp3 | sort -R | head -1000 > /var/ramdrive/list.txt
+
 while :
   do
-    sh /pifmplay "`shuf -n 1 /var/tmp/list.txt`"
+    song="$(shuf -n 1 /var/ramdrive/list.txt)"
+    title="${song##*/}"
+    title="${title%.[mM][pP]3}"
+    printf "%s\n" "$title" > /var/ramdrive/index.html
+
+    nice -10 sh /pifmplay "$song"
 done
 
 exit 0
