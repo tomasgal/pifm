@@ -79,7 +79,23 @@ The maintained `rc.local` script performs these steps:
 4. write that title to `/var/ramdrive/index.html`,
 5. call `/pifmplay` with the selected file.
 
-This replaces the older status mechanism, where cron inspected the running `sox` process and used shell text processing to infer the current track.
+This means that `rc.local` now takes over the status-update function that was previously handled by cron. Cron remains suitable for periodic playlist refreshes, but it is no longer responsible for discovering the currently playing track.
+
+## Why the status cron was retired
+
+The earlier appliance used a cron job to update the web status file. The job repeatedly inspected the process list, looked for the running `sox` process, extracted the MP3 filename from the command line, stripped the path and suffix, and wrote the result to the web status file.
+
+That design worked, but it was a workaround. It depended on process-list formatting, timing, the existence of exactly the expected `sox` command line, and shell text processing. It also tried to answer a question indirectly: "what is currently playing?" by observing a side effect of playback.
+
+The maintained design answers the same question at the point where the decision is made. The playback loop already selects the next MP3 file before calling `/pifmplay`; therefore it can write the display title directly to `/var/ramdrive/index.html`. This makes `rc.local` the source of truth for both playback and status:
+
+```text
+song="$(shuf -n 1 /var/ramdrive/list.txt)"
+write display title to /var/ramdrive/index.html
+start /pifmplay "$song"
+```
+
+This removes the fragile process parser, reduces cron activity, and keeps the status file in RAM. If the web status is wrong, the bug is now close to the playback decision, not in a separate periodic observer.
 
 ## Playback wrapper
 
