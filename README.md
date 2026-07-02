@@ -12,68 +12,86 @@ Radio transmission is regulated. This repository is a historical experiment and 
 
 This is a historical build and operations snapshot. It is not a maintained audio streaming project and should not be treated as a current deployment guide.
 
-The original setup depended on an old Raspberry Pi software environment, PiFM behavior, `rc.local`, `ifconfig`/`ifup`, `avconv`, `sox`, cron jobs, and local filesystem paths. Modern Raspberry Pi OS releases, audio tools, init systems, networking stacks, and legal/regulatory expectations have changed. Any current use should be redesigned from scratch and reviewed for legality and safety.
+The original setup depended on an old Raspberry Pi software environment, PiFM behavior, `rc.local`, `ifconfig`/`ifup`, `sox`, cron jobs, and local filesystem paths. Modern Raspberry Pi OS releases, audio tools, init systems, networking stacks, and legal/regulatory expectations have changed. Any current use should be redesigned from scratch and reviewed for legality and safety.
+
+## 2026 maintenance pass
+
+In 2026 the appliance was reviewed and lightly maintained after roughly six years since the Raspbian Buster appliance build. The goal was not to modernize the stack or turn it into a maintained project. The goal was to preserve a working long-running Raspberry Pi Zero radio appliance while removing a few fragile parts.
+
+The maintenance pass focused on small, low-risk changes:
+
+- the web status update was moved from a cron/process-list parser into the playback loop;
+- `rc.local` now writes the selected track title directly to `/var/ramdrive/index.html` before playback starts;
+- `playfm` was reduced to the only path actually used by the appliance: MP3 file -> `sox` -> `pifm`;
+- old playback branches for URLs, folders, pipes, YouTube, `avconv`/`ffmpeg`, wav/m4a fallbacks, and pause/resume/stop commands were removed from the maintained wrapper;
+- automatic apt/man-db housekeeping was disabled on the running appliance to reduce unnecessary background activity on the SD-card based system.
+
+The resulting snapshot is still deliberately conservative: it keeps the historical PiFM binary, Raspbian-era assumptions, `rc.local`, the small ramdrive status file, and the local mini_httpd status endpoint.
 
 ## Overview
 
-The intended architecture was:
+The maintained appliance architecture is:
 
 ```text
-MP3 repository
-    -> generated random playlist
-    -> boot-time playback loop
-    -> sox / avconv audio conversion
-    -> PiFM
+MP3 repository on /radio_nas
+    -> hourly random playlist in /var/ramdrive/list.txt
+    -> boot-time rc.local playback loop
+    -> selected title written to /var/ramdrive/index.html
+    -> /pifmplay playback wrapper
+    -> sox MP3 decoding and mono WAV conversion
+    -> PiFM binary
     -> low-power FM signal
     -> nearby FM receiver
 ```
 
-The repository also contains a simple PHP status page. In this version it is primarily a viewer: it shows system information, CPU governor state, currently running audio processing command, playlist timestamp, repository size, memory and disk usage, and optional weather output.
+The web status interface is intentionally minimal. `mini_httpd` serves the RAM-backed `index.html` file from `/var/ramdrive`, so the status page shows only the current track name and does not need a PHP diagnostic page in the maintained appliance variant.
 
 ## Main files
 
 | File | Purpose |
 | --- | --- |
-| `index.php` | Historical local web status page. It shows system and playback information; it is not a secured public web UI. |
+| `index.php` | Historical local web status page. It shows system and playback information; it is not a secured public web UI. The maintained appliance variant uses a simpler RAM-backed `index.html` status file. |
 | `network-monitor.sh` | Simple Wi-Fi watchdog for old Raspbian-style networking. |
-| `notes.txt` | Historical crontab notes, including hourly playlist generation. |
-| `playfm` | Adapted playback wrapper that scans the music directory, builds a playlist, converts audio, and pipes it into PiFM. |
-| `rc.local` | Historical boot-time startup script. It generates a shuffled playlist and starts an endless playback loop. |
+| `notes.txt` | Historical and maintained crontab notes, including hourly playlist generation and the retired status-parser cron line. |
+| `playfm` | Simplified repository copy of the installed `/pifmplay` wrapper. It plays one MP3 file through `sox` and the PiFM binary. |
+| `rc.local` | Boot-time startup script. It generates a shuffled playlist, writes the current track status, and starts an endless playback loop. |
 | `www/20150627.JPG` | Project photograph. |
 
 ## Playlist generation
 
-The historical crontab reconstructed in `notes.txt` generated a random list of MP3 files every hour:
+The maintained appliance keeps a randomized playlist in a small RAM-backed filesystem:
 
 ```cron
-0 * * * * ls /radio_nas/*.mp3 | sort -R | head -1000 > /var/tmp/list.txt
+@hourly ls /radio_nas/*.mp3 | sort -R | head -1000 > /var/ramdrive/list.txt
 ```
 
-The same notes also contain a daily cache-drop command:
+`rc.local` also generates the same file during startup before entering the playback loop.
 
-```cron
-5 0 * * * sync && echo 3 > /proc/sys/vm/drop_caches
-```
-
-This reflects the practical constraints of the original Raspberry Pi deployment. It should not be copied to a modern system without understanding the consequences.
+Older historical notes used `/var/tmp/list.txt`; the maintained appliance version uses `/var/ramdrive/list.txt` to make the tmpfs/ramdrive role explicit.
 
 ## Boot-time behavior
 
-The historical `rc.local` script performed these steps:
+The maintained `rc.local` script performs these steps:
 
-1. set SD-card read-ahead,
-2. remove old PiFM temporary files,
-3. generate `/var/tmp/list.txt` from `/radio_nas/*.mp3`,
-4. repeatedly select one random item from the generated list,
+1. generate `/var/ramdrive/list.txt` from `/radio_nas/*.mp3`,
+2. repeatedly select one random item from the generated list,
+3. derive a display title by removing the directory path and `.mp3` suffix,
+4. write that title to `/var/ramdrive/index.html`,
 5. call `/pifmplay` with the selected file.
 
-The script also documents that `/var/tmp` was mounted as a small tmpfs in `/etc/fstab`.
+This replaces the older status mechanism, where cron inspected the running `sox` process and used shell text processing to infer the current track.
 
 ## Playback wrapper
 
-`playfm` contains a more self-contained playback approach. It scans the music directory, filters supported audio files, optionally shuffles them, converts each track to mono WAV through `sox` and `avconv`, and pipes the result into the PiFM binary.
+`playfm` is the repository copy of the simplified playback wrapper installed as `/pifmplay` on the appliance.
 
-The repository therefore contains more than one historical playback approach. `rc.local` shows a boot-time loop using `/pifmplay` and `/var/tmp/list.txt`, while `playfm` is a fuller wrapper that builds and plays its own playlist.
+The maintained wrapper does one thing:
+
+```text
+MP3 file -> sox -v 0.9 -t mp3 ... -r 22050 -c 1 -> /pifm - 100.0
+```
+
+The previous generic script supported more modes, but the running appliance only used local MP3 files. The reduced wrapper is easier to understand and avoids unused dependencies such as `avconv`/`ffmpeg` for the normal path.
 
 ## Network watchdog
 
@@ -81,7 +99,9 @@ The repository therefore contains more than one historical playback approach. `r
 
 ## Web status interface
 
-`index.php` is a local diagnostic page. It executes shell commands through PHP and prints their output. This was useful for a trusted local network experiment, but it is not appropriate for exposure to an untrusted network.
+`index.php` is a historical local diagnostic page. It executes shell commands through PHP and prints their output. This was useful for a trusted local network experiment, but it is not appropriate for exposure to an untrusted network.
+
+The maintained appliance status path is simpler: the playback loop writes the current track to `/var/ramdrive/index.html`, and `mini_httpd` serves that file from RAM.
 
 The original version also contained precise coordinates for weather output. Those have been removed from the public repository and replaced by a placeholder comment.
 
@@ -89,12 +109,11 @@ The original version also contained precise coordinates for weather output. Thos
 
 - This is a historical Raspberry Pi / PiFM experiment, not a maintained transmitter stack.
 - FM transmission is legally regulated and can interfere with other services if misused.
-- The original scripts use old Raspbian conventions such as `rc.local`, `ifconfig`, and `ifup`.
-- `avconv` has largely been replaced by `ffmpeg` in many modern environments.
-- The web UI executes local shell commands and should be treated as local-only diagnostic tooling.
-- Hard-coded paths such as `/radio_nas`, `/pifm`, `/pifmplay`, and `/var/tmp/list.txt` reflect the original deployment.
-- The playback scripts assume a specific local music repository and old PiFM behavior.
-- The repository is useful for historical reconstruction, not for direct modern deployment.
+- The scripts use old Raspbian conventions such as `rc.local`, `ifconfig`, and `ifup`.
+- The maintained playback path assumes local MP3 files and does not implement a general audio player.
+- The web UI and status mechanism are designed for a trusted local network appliance, not a public service.
+- Hard-coded paths such as `/radio_nas`, `/pifm`, `/pifmplay`, and `/var/ramdrive/list.txt` reflect the appliance deployment.
+- The project remains useful for historical reconstruction and appliance maintenance notes, not for direct modern deployment.
 
 ## Image
 
@@ -102,6 +121,6 @@ The original version also contained precise coordinates for weather output. Thos
 
 ## Authorship
 
-Project notes, web UI additions, integration work, and project photograph by Tomáš Gál, unless otherwise noted.
+Project notes, web UI additions, integration work, maintenance notes, and project photograph by Tomáš Gál, unless otherwise noted.
 
-The PiFM-related playback script is an adapted historical script and should be read as part of this deployment snapshot rather than as a maintained upstream project.
+The PiFM-related playback script is based on a historical script by Mikael Jakhelln and should be read as part of this deployment snapshot rather than as a maintained upstream project.
