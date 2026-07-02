@@ -20,16 +20,39 @@ Maintained appliance variant:
 
 @hourly ls /radio_nas/*.mp3 | sort -R | head -1000 > /var/ramdrive/list.txt
 
+This cron job still has a clear role: it periodically refreshes the random pool
+of candidate tracks. It does not need to know what is currently playing.
+
 Status update cron retired
 --------------------------
 
 Before the 2026 maintenance pass, the web status page was updated by a cron line
 that repeatedly inspected the running sox process and extracted the current file
-name. That was a pragmatic but fragile process-list parser.
+name. In simplified form, the logic was:
 
-After the maintenance pass, status generation is handled directly by rc.local:
-the playback loop selects a song, strips the .mp3 suffix, writes the title to
-/var/ramdrive/index.html, and then starts /pifmplay for that same file.
+1. find the running sox process,
+2. read the command line from the process table,
+3. strip everything except the MP3 filename,
+4. remove the .mp3 suffix,
+5. write the result to /var/ramdrive/index.html.
+
+That was a pragmatic but fragile process-list parser. It depended on the exact
+shape of the running sox command, on process timing, and on shell text processing.
+It also updated the status indirectly: it observed the playback process after the
+track had already been selected.
+
+The maintained design moves this responsibility into rc.local. The playback loop
+already selects the next track, so it can write the status at the same time:
+
+1. select a song from /var/ramdrive/list.txt,
+2. derive the display title from that same path,
+3. write the title to /var/ramdrive/index.html,
+4. start /pifmplay with that same song.
+
+This makes rc.local the source of truth for both playback and status. Cron keeps
+the periodic playlist-refresh role, while rc.local owns the current-track status.
+The result is simpler, more deterministic, and less dependent on process-list
+parsing.
 
 The cron-based status parser is therefore no longer needed.
 
