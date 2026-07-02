@@ -1,17 +1,45 @@
 Historical crontab notes
 ========================
 
-The original system generated a random MP3 playlist once per hour. The playlist
-was written to /var/tmp/list.txt and consumed by the boot-time playback loop.
+This file documents the cron side of the Raspberry Pi FM radio appliance. The
+repository is a historical/maintenance snapshot, not a current deployment guide.
 
-crontab -l showed:
+Original playlist cron
+----------------------
+
+The original system generated a random MP3 playlist once per hour. The playlist
+was written to a tmpfs-backed file and consumed by the boot-time playback loop.
+Older notes used /var/tmp/list.txt; the maintained appliance version uses
+/var/ramdrive/list.txt.
+
+Example historical line:
 
 0 * * * * ls /radio_nas/*.mp3 | sort -R | head -1000 > /var/tmp/list.txt
 
-The original system also performed a daily sync and cache drop:
+Maintained appliance variant:
+
+@hourly ls /radio_nas/*.mp3 | sort -R | head -1000 > /var/ramdrive/list.txt
+
+Status update cron retired
+--------------------------
+
+Before the 2026 maintenance pass, the web status page was updated by a cron line
+that repeatedly inspected the running sox process and extracted the current file
+name. That was a pragmatic but fragile process-list parser.
+
+After the maintenance pass, status generation is handled directly by rc.local:
+the playback loop selects a song, strips the .mp3 suffix, writes the title to
+/var/ramdrive/index.html, and then starts /pifmplay for that same file.
+
+The cron-based status parser is therefore no longer needed.
+
+Other historical lines
+----------------------
+
+Some earlier deployments also performed a daily sync and cache drop:
 
 5 0 * * * sync && echo 3 > /proc/sys/vm/drop_caches
 
-These lines document the historical Raspberry Pi deployment. They should not be
+That line is preserved here only as historical documentation. It should not be
 copied to a modern system without understanding the storage, memory, and service
 implications.
