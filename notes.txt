@@ -1,4 +1,17 @@
-crontab -l shows:
+Historical crontab notes
+========================
+
+The original system generated a random MP3 playlist once per hour. The playlist
+was written to /var/tmp/list.txt and consumed by the boot-time playback loop.
+
+crontab -l showed:
 
 0 * * * * ls /radio_nas/*.mp3 | sort -R | head -1000 > /var/tmp/list.txt
+
+The original system also performed a daily sync and cache drop:
+
 5 0 * * * sync && echo 3 > /proc/sys/vm/drop_caches
+
+These lines document the historical Raspberry Pi deployment. They should not be
+copied to a modern system without understanding the storage, memory, and service
+implications.
