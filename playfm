@@ -1,102 +1,43 @@
-#!/bin/bash
+#!/bin/sh
+
+# Written by Mikael Jakhelln.
+# Simplified for the piradio Raspberry Pi Zero appliance by Tomas Gal and ChatGPT.
 #
-# Historical PiFM playback wrapper.
+# 2026 maintenance note:
+#   This wrapper was reduced during a maintenance pass roughly six years after
+#   the Raspbian Buster appliance build. The historical generic player supported
+#   folders, URLs, pipes, YouTube, wav/m4a fallbacks, avconv/ffmpeg paths, and
+#   playback control commands. The deployed radio only needs one path:
 #
-# This adapted script scans a music directory, builds a playlist, converts each
-# audio file to mono WAV, and pipes the result into the PiFM binary. It is kept
-# here as part of the original Raspberry Pi FM transmitter deployment snapshot.
+#       MP3 file -> sox -> PiFM
 #
-# Radio transmission is regulated. The default frequency below is a historical
-# example only. Use this kind of tool only within the legal limits of your
-# jurisdiction.
+# Usage:
+#   sh /pifmplay "/radio_nas/file.mp3"
+#   sh /pifmplay "/radio_nas/file.mp3" 100.0
+#
+# Repository note:
+#   This file is named playfm in the repository. In the appliance deployment it
+#   was installed as /pifmplay.
 
-MUSIC_ROOT="${MUSIC_ROOT:-/radio_nas}"
-PIFM_BINARY="${PIFM_BINARY:-/pifm}"
-PIFM_FREQUENCY="${PIFM_FREQUENCY:-100.0}" # historical example; check local law before transmitting
-LOG_ROOT="${LOG_ROOT:-/var/www/}"
-SHUFFLE="${SHUFFLE:-true}" # true | false
-WHITELIST="3gp|aac|flac|m4a|m4p|mmf|mp3|ogg|vox|wav|wma"
+INPUT="$1"
+FREQUENCY="${2:-100.0}"
 
-#####################
+SOX="/usr/bin/sox"
+PIFM="/pifm"
 
-LOG="$LOG_ROOT/pifm.log.txt"
-mkdir -p "$LOG_ROOT"
+if [ -z "$INPUT" ]; then
+    echo "Usage: sh /pifmplay /path/to/file.mp3 [frequency]" >&2
+    exit 2
+fi
 
-TEMP_FILES_PREFIX='pifm.radio.tempfile'
-TEMP_FILES_PATTERN="$TEMP_FILES_PREFIX.XXXXX"
+if [ ! -r "$INPUT" ]; then
+    echo "Cannot read input file: $INPUT" >&2
+    exit 1
+fi
 
- {
-    echo; echo -n "script $0 starting at"; date
-    echo "MUSIC_ROOT: $MUSIC_ROOT"
-    echo "PIFM_BINARY: $PIFM_BINARY"
-    echo "PIFM_FREQUENCY: $PIFM_FREQUENCY"
-    
-    iteration=0
-    while [ 1 ] # run forever...
-    do
-      iteration=$(( $iteration + 1 ))
-      echo -n "start with iteration $iteration of playing all files in $MUSIC_ROOT at "; date
-      rm -vf "/tmp/$TEMP_FILES_PREFIX."*
- 	
-      # Collect songs in the specified directory.
-      
-      songListFile="$( mktemp "$TEMP_FILES_PATTERN" )"
- 			
-      find "$MUSIC_ROOT" -type f -follow \
-      | grep -iE ".*\.($WHITELIST)$" \
-      | sort \
-      > "$songListFile"
- 						
-      songCount="$( wc -l "$songListFile" | grep -Eo '^[0-9]*' )"
-      
-         if [ "x" = "x$songCount" ]; then echo "FATAL: no songs could be found in $MUSIC_ROOT"; exit 2; fi
-         if [ $songCount -lt 1 ];    then echo "FATAL: no songs could be found in $MUSIC_ROOT"; exit 2; fi
- 	
-         # Generate a playlist from the results.
- 	
- 	playlist="$( mktemp "$TEMP_FILES_PATTERN" )"
- 	if [ $SHUFFLE = "true" ]; then 
- 	   # Prefix each line with a random number, sort numerically, and cut the prefix.
- 	   # This is a historical shell-only shuffle approach.
-             cat "$songListFile" \
- 	    | while read song; do echo "${RANDOM} $song"; done \
-             | sort -n \
- 	    | cut -d " " -f 2- \
- 	    | while read song; do echo "${RANDOM} $song"; done \
-             | sort -n \
- 	    | cut -d " " -f 2- \
- 	    > "$playlist"
- 	else
- 	    cp "$songListFile" "$playlist"
-         fi
- 	
- 	# Play each song from the playlist.
- 		
- 	echo "will now air $songCount songs of $playlist on frequency $PIFM_FREQUENCY, enjoy!"
-         cat "$playlist" \
- 	| while read song 
- 	  do
- 	# Simple version: take the first audio channel:
- 	#
- 	# command="avconv -v fatal -i '$song' -ac 1 -ar 22050 -b 352k -f wav - | '$PIFM_BINARY' - $PIFM_FREQUENCY"
- 	# Extended version: merge audio channels:
- 	#
- 	# Merge the channels of the song into one mono channel and write to stdout:
-         #     sox '$song' -t wav - channels 1
- 	#
- 	# Read mono audio from stdin, convert it into PiFM-compatible WAV, and write to stdout:
-         #     avconv -v fatal -i pipe:0 -ac 1 -ar 22050 -b 352k -f wav -
-         #
- 	# Read compatible audio data from stdin and transmit with PiFM at the specified frequency:
-         #     '$PIFM_BINARY' - $PIFM_FREQUENCY 
- 	command="sudo -u www-data sox '$song' -t wav - channels 1 | avconv -v fatal -i pipe:0 -ac 1 -ar 22050 -b 220k -f wav - | '$PIFM_BINARY' - $PIFM_FREQUENCY"
+if [ ! -x "$PIFM" ]; then
+    echo "PiFM binary not executable: $PIFM" >&2
+    exit 1
+fi
 
-           echo "$command # $( date )"
-           bash -c "$command"
- 			
-        done # with playlist
-        echo -n "done with iteration $iteration at "; date
-
-        done # with endless loop :-)
-     
-} 2>&1 | tee -a "$LOG"
+"$SOX" -v 0.9 -t mp3 "$INPUT" -t wav --input-buffer 80000 -r 22050 -c 1 - | "$PIFM" - "$FREQUENCY"
